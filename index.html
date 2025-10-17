@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>نظام ملفات المستخدمين - سري</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght=400;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#02050e; /* خلفية داكنة جداً */
+    --panel:rgba(255,255,255,0.06); /* لوحة شفافة لامعة */
+    --accent1:#00ff88; /* أخضر نيون */
+    --accent2:#00b864; /* أخضر داكن */
+    --paper:#071026; /* خلفية داكنة لنموذج التفاصيل */
+    --ink:#e6eefc; /* لون النص الفاتح */
+    --shadow-color: rgba(0, 255, 136, 0.4); /* ظل نيون */
+  }
+  *{box-sizing:border-box}
+  /* استخدام IBM Plex Mono كخط رئيسي للطابع الاستخباراتي */
+  body{margin:0;font-family:'IBM Plex Mono', 'Cairo', monospace; background:var(--bg); color:var(--ink); padding:18px}
+  .container{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:380px 1fr;gap:18px}
+  .panel{background:var(--panel);padding:16px;border-radius:12px;box-shadow: 0 0 5px rgba(0, 255, 136, 0.2);} /* إضافة ظل نيون */
+  h1{margin:0 0 15px 0;font-size:22px;color:var(--accent1);text-shadow: 0 0 3px var(--shadow-color)}
+  h2{margin:0 0 10px 0;font-size:18px;color:var(--accent1)}
+  label{display:block;margin-top:10px;color:var(--accent1);font-size:13px;font-weight:600}
+  
+  /* حقول الإدخال */
+  input[type="text"], input[type="date"], textarea, select {
+    width:100%;padding:10px;border-radius:4px;
+    border:1px solid var(--accent1);
+    background:rgba(0,0,0,0.5);
+    color:var(--ink);
+    font-size:14px;
+    font-family:'IBM Plex Mono', monospace;
+    transition: box-shadow 0.2s;
+  }
+  input[type="text"]:focus, input[type="date"]:focus, textarea:focus, select:focus {
+    box-shadow: 0 0 8px var(--shadow-color);
+    outline: none;
+  }
+  /* يتم إضافة readonly في JS عند التعديل للحفاظ على الكود الأصلي */
+  input[type="text"][readonly] {
+    opacity: 0.7;
+    background: rgba(0,0,0,0.7);
+    cursor: default;
+  }
+
+  textarea{min-height:100px;resize:vertical}
+  .row{display:flex;gap:8px}
+  .btn{padding:10px 12px;border-radius:4px;border:0;cursor:pointer;font-weight:700;font-family:'Cairo', system-ui, Arial}
+  /* تعديل ألوان الأزرار لتناسب النمط الجديد */
+  .btn-primary{background:var(--accent1);color:#02050e;text-shadow:none;}
+  .btn-primary:hover{background:var(--accent2)}
+  .btn-ghost{background:transparent;border:1px solid var(--accent1);color:var(--accent1)}
+  .btn-ghost:hover{background:rgba(0, 255, 136, 0.1)}
+  .small{font-size:12px;color:#9aa8bf;margin-top:8px}
+  
+  /* list */
+  .searchWrap{display:flex;gap:8px;align-items:center}
+  .searchInput{flex:1;padding:8px;border-radius:4px;border:1px solid var(--accent1);background:rgba(0,0,0,0.5);color:var(--ink);font-family:'IBM Plex Mono', monospace;}
+  .list{margin-top:12px;display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto;padding-right:6px}
+  .card{background:linear-gradient(180deg,rgba(0, 255, 136, 0.05),rgba(0, 255, 136, 0.02));padding:10px;border-radius:8px;display:flex;gap:10px;align-items:center;border:1px solid rgba(0, 255, 136, 0.2)}
+  .avatar{width:64px;height:64px;border-radius:6px;background:var(--accent2);display:flex;align-items:center;justify-content:center;color:#000;font-weight:700;overflow:hidden;border:1px solid var(--accent1)}
+  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .meta{flex:1;min-width:0}
+  .meta h3{margin:0;font-size:15px;color:var(--ink)}
+  .meta p{margin:4px 0 0 0;font-size:13px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cardActions{display:flex;gap:8px}
+  .muted{color:#7c7c7c;font-size:12px}
+
+  /* details area (Paper) */
+  .detailPaper{background:var(--paper);color:var(--ink);padding:18px;border-radius:12px;box-shadow:0 0 15px rgba(0, 255, 136, 0.5);min-height:400px;border:1px solid var(--accent1)}
+  .field{margin-top:8px}
+  .previewImg{width:160px;height:160px;border-radius:4px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--accent1)}
+  .previewImg img{width:100%;height:100%;object-fit:cover}
+  .actionsRow{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+  .exportBtn{background:var(--accent2);color:#02050e}
+
+  /* MODAL STYLES (الوحدة المنبثقة) */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: none; /* مخفي افتراضياً */
+    justify-content: center; align-items: center;
+    z-index: 1000;
+  }
+  .modal-content {
+    background: var(--paper); color: var(--ink);
+    padding: 20px; border-radius: 8px;
+    width: 90%; max-width: 500px;
+    box-shadow: 0 0 20px var(--shadow-color);
+    border: 1px solid var(--accent1);
+  }
+  .modal-close {
+    float: left; font-size: 24px; font-weight: bold;
+    cursor: pointer; color: var(--accent1);
+  }
+  .modal-data div {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-bottom: 1px dashed rgba(0, 255, 136, 0.2);
+    font-size: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .modal-data strong {
+    color: var(--accent1);
+    margin-left: 5px;
+    font-weight: 700;
+  }
+  .modal-data .img-preview {
+    width: 100px; height: 100px; border-radius: 4px;
+    margin: 10px auto; background: var(--bg);
+    overflow: hidden;
+  }
+  .modal-data .img-preview img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+
+
+  /* responsive */
+  @media (max-width:980px){ .container{grid-template-columns:1fr} .previewImg{width:100%;height:240px} }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="panel" aria-labelledby="panel-title">
+    <h1 id="panel-title">نظام إدارة الملفات السرية</h1>
+
+    <label for="search">البحث في الملفات</label>
+    <div class="searchWrap">
+      <input id="search" class="searchInput" placeholder="ابحث بالاسم أو الكود السري..." />
+      <button id="btnClearSearch" class="btn btn-ghost" title="مسح البحث">مسح</button>
+    </div>
+
+    <div class="list" id="recordsList" aria-live="polite"></div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+       <button id="btnOpenSearchModal" class="btn exportBtn" style="flex:1">فتح ملف بالكود السري</button>
+    </div>
+
+    <div class="small">البيانات مُشفرة ومُخزنة محليًا في المتصفح (IndexedDB) تحت تصنيف: سري محدود.</div>
+    <hr style="border:none;border-top:1px solid var(--accent1);margin-top:12px">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button id="btnExportAll" class="btn exportBtn">تصدير قاعدة البيانات (JSON)</button>
+      <button id="btnImport" class="btn btn-ghost">استيراد قاعدة البيانات</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+      <button id="btnClearAll" class="btn btn-ghost" title="حذف كل الملفات">حذف الكل</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="detailPaper" role="region" aria-label="نموذج الملف">
+      <h2 id="formTitle">فتح/إنشاء ملف سري</h2>
+
+      <div class="row">
+        <div style="flex:1">
+          <label class="field">الكود السري (11 رقم) * (يتم توليده تلقائياً)</label>
+          <input type="text" id="secretCodeInput" readonly maxlength="11" placeholder="مثال: 19593012040">
+
+          <label class="field">تصنيف الأهمية</label>
+          <select id="securityLevelInput">
+            <option value="Unclassified">غير مصنف</option>
+            <option value="Confidential">سري محدود</option>
+            <option value="Secret">سري</option>
+            <option value="Top Secret">سري للغاية</option>
+          </select>
+          
+        </div>
+        <div style="width:160px">
+          <label class="field">الصّورة (اختياري)</label>
+          <input type="file" id="photoInput" accept="image/*" />
+          <div class="previewImg" id="photoPreview" style="margin-top:8px">لا توجد صورة</div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div style="flex:1">
+          <label class="field">الاسم بالكامل</label>
+          <input type="text" id="nameInput" placeholder="الاسم المتداول">
+        </div>
+        <div style="width:160px">
+          <label class="field">تاريخ الميلاد (DOB)</label>
+          <input type="date" id="dobInput">
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label class="field">الجنسية</label>
+          <input type="text" id="nationalityInput" placeholder="الجنسية الأصلية/المتداولة">
+        </div>
+        <div style="flex:1">
+          <label class="field">الموقع الحالي</label>
+          <input type="text" id="locationInput" placeholder="آخر موقع معروف">
+        </div>
+      </div>
+<div>
+  <link rel="" href="M.html" title="" type="" />
+  <link rel="" href="app-report-generator.html" title="" type="" />
+</div>
+      <label class="field">البيانات الاستخباراتية (Intelligence Info)</label>
+      <textarea id="infoInput" placeholder="ملاحظات مفصلة، تحليل سلوكي، اتصالات مشبوهة..."></textarea>
+      
+      <div class="actionsRow">
+        <button id="saveBtn" class="btn btn-primary">حفظ كملف جديد</button>
+        <button id="updateBtn" class="btn btn-primary" style="display:none">تحديث الملف</button>
+        <button id="cancelEditBtn" class="btn btn-ghost" style="display:none">إلغاء التعديل</button>
+        <button id="exportRecordBtn" class="btn btn-ghost" style="display:none">تصدير هذا الملف</button>
+        <button id="deleteBtn" class="btn btn-ghost" style="display:none">حذف هذا الملف</button>
+      </div>
+      
+
+      <div style="margin-top:16px" class="muted">آخر تعديل على السجل: <span id="lastModified">-</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="searchModal" class="modal-overlay">
+  <div class="modal-content">
+    <span id="closeModal" class="modal-close">&times;</span>
+    <h2>نظام فك الترميز السري</h2>
+    <label for="modalCodeInput">أدخل الكود السري (11 رقم)</label>
+    <div class="row" style="margin-bottom:15px">
+      <input type="text" id="modalCodeInput" maxlength="11" placeholder="الكود السري">
+      <button id="modalSearchBtn" class="btn btn-primary" style="width:120px">فك الترميز</button>
+    </div>
+    
+    <div id="modalResult" class="modal-data" style="min-height:100px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px">
+      <div id="modal-name">الاسم: <strong>-</strong></div>
+      <div id="modal-secret">الكود: <strong>-</strong></div>
+      <div id="modal-level">التصنيف: <strong>-</strong></div>
+      <div id="modal-location">الموقع الحالي: <strong>-</strong></div>
+      <div id="modal-info">المعلومات الاستخباراتية: <strong>لم يتم العثور على سجل يطابق الكود المدخل.</strong></div>
+      <div id="modal-image" class="img-preview">لا توجد صورة</div>
+      <div style="text-align:center; font-style:italic; font-size:12px; margin-top:10px; color:#aaa">يُرجى إدخال كود صحيح.</div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ====== IndexedDB helper (vanilla) ====== */
+const DB_NAME = 'userRecordsDB';
+const STORE_NAME = 'records_v1';
+const DB_VERSION = 1;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (ev) => {
+      const db = ev.target.result;
+      if(!db.objectStoreNames.contains(STORE_NAME)){
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        store.createIndex('name', 'name', { unique: false });
+        store.createIndex('secretCode', 'secretCode', { unique: true }); 
+        store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function withStore(mode, callback){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, mode);
+    const store = tx.objectStore(STORE_NAME);
+    const result = callback(store);
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function addRecord(record){
+  record.id = record.id || crypto.randomUUID();
+  record.createdAt = record.createdAt || new Date().toISOString();
+  record.updatedAt = new Date().toISOString();
+  return withStore('readwrite', store => store.put(record));
+}
+
+async function getAllRecords(){
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    req.onsuccess = ()=> resolve(req.result.sort((a,b)=> b.updatedAt.localeCompare(a.updatedAt)));
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+async function getRecordById(id){
+  return withStore('readonly', store => store.get(id));
+}
+
+async function getRecordBySecretCode(code){
+  return withStore('readonly', store => {
+    const index = store.index('secretCode');
+    const request = index.get(code);
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
+
+async function deleteRecordById(id){
+  return withStore('readwrite', store => store.delete(id));
+}
+
+async function clearAll(){
+  return withStore('readwrite', store => store.clear());
+}
+
+/* ====== UI logic ====== */
+const recordsList = document.getElementById('recordsList');
+const searchInput = document.getElementById('search');
+const btnClearSearch = document.getElementById('btnClearSearch');
+
+const nameInput = document.getElementById('nameInput');
+const photoInput = document.getElementById('photoInput');
+const infoInput = document.getElementById('infoInput');
+const secretCodeInput = document.getElementById('secretCodeInput'); 
+const dobInput = document.getElementById('dobInput'); 
+const nationalityInput = document.getElementById('nationalityInput'); 
+const locationInput = document.getElementById('locationInput'); 
+const securityLevelInput = document.getElementById('securityLevelInput'); 
+
+const photoPreview = document.getElementById('photoPreview');
+const saveBtn = document.getElementById('saveBtn');
+const updateBtn = document.getElementById('updateBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
+const exportRecordBtn = document.getElementById('exportRecordBtn');
+const deleteBtn = document.getElementById('deleteBtn');
+const lastModified = document.getElementById('lastModified');
+const formTitle = document.getElementById('formTitle');
+
+const btnExportAll = document.getElementById('btnExportAll');
+const btnImport = document.getElementById('btnImport');
+const importFile = document.getElementById('importFile');
+const btnClearAll = document.getElementById('btnClearAll');
+
+// Modal Elements
+const searchModal = document.getElementById('searchModal');
+const btnOpenSearchModal = document.getElementById('btnOpenSearchModal');
+const closeModal = document.getElementById('closeModal');
+const modalCodeInput = document.getElementById('modalCodeInput');
+const modalSearchBtn = document.getElementById('modalSearchBtn');
+const modalName = document.getElementById('modal-name');
+const modalSecret = document.getElementById('modal-secret');
+const modalLevel = document.getElementById('modal-level');
+const modalLocation = document.getElementById('modal-location');
+const modalInfo = document.getElementById('modal-info');
+const modalImage = document.getElementById('modal-image');
+
+
+let editingId = null;
+let currentImageDataUrl = null;
+let allRecordsCache = [];
+let randomSuffix = '00'; // لتخزين الرقم العشوائي الخاص بالجلسة
+
+// دالة توليد الكود السري بناءً على الحقول
+function generateSecretCode() {
+    // 1. الخانة 1: الجنسية (1 رقم)
+    const nat = (nationalityInput.value || '').trim().toLowerCase();
+    let natCode = '9'; // 9: مجهول
+    if (nat.includes('مصر') || nat.includes('egypt')) natCode = '1';
+    else if (nat.includes('سعودي') || nat.includes('اماراتي') || nat.includes('gulf')) natCode = '2';
+    else if (nat.includes('امريكا') || nat.includes('europe')) natCode = '3';
+    
+    // 2. الخانة 2-3: سنة الميلاد (2 رقم)
+    let dobCode = '00';
+    if (dobInput.value) {
+        const year = dobInput.value.substring(2, 4); // آخر رقمين من السنة
+        dobCode = year;
+    }
+
+    // 3. الخانة 4: تصنيف الأهمية (1 رقم)
+    const level = securityLevelInput.value;
+    let levelCode = '0'; // 0: غير مصنف
+    if (level.includes('Confidential')) levelCode = '3';
+    else if (level.includes('Secret')) levelCode = '5';
+    else if (level.includes('Top Secret')) levelCode = '9';
+    
+    // 4. الخانة 5: الموقع القاري (1 رقم)
+    const loc = (locationInput.value || '').trim().toLowerCase();
+    let locCode = '9'; // 9: مجهول
+    if (loc.includes('آسيا') || loc.includes('asia') || loc.includes('الخليج')) locCode = '1';
+    else if (loc.includes('أوروبا') || loc.includes('europe') || loc.includes('أمريكا')) locCode = '2';
+    else if (loc.includes('أفريقيا') || loc.includes('africa')) locCode = '3';
+
+    // 5. الخانة 6-7: الأبجدية (2 رقم)
+    const name = (nameInput.value || '').trim();
+    let alphaCode = '00';
+    if (name) {
+        // ترتيب أول حرف عربي (افتراض بسيط: أ=01، ب=02... الخ)
+        const firstChar = name[0];
+        const arabicAlphabet = 'أبتثجحخدذرزسشصضطظعغفقكلمنهوي';
+        let index = arabicAlphabet.indexOf(firstChar.toLowerCase());
+        if (index === -1) {
+             // محاولة التعامل مع اللاتينية (A=01, B=02...)
+             const latinIndex = firstChar.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0) + 1;
+             if(latinIndex >= 1 && latinIndex <= 26) {
+                index = latinIndex - 1; 
+             }
+        }
+        if (index !== -1) {
+            alphaCode = String(index + 1).padStart(2, '0');
+        }
+    }
+    
+    // 6. الخانة 8-9: الحالة (2 رقم) - ثابت (مراقب)
+    const status = '20'; // 20: مراقب (يمكن تغييرها إلى 10 للمطلوب، 30 للمحايد)
+
+    // 7. الخانة 10-11: مفتاح فريد/عشوائي (2 رقم)
+    // نستخدم الرقم العشوائي الذي تم تخزينه عند إعادة الضبط لزيادة التفرد
+    const unique = randomSuffix; 
+
+    // تجميع الكود (1 + 2 + 1 + 1 + 2 + 2 + 2 = 11 خانة)
+    return `${natCode}${dobCode}${levelCode}${locCode}${alphaCode}${status}${unique}`;
+}
+
+// دالة لتحديث الكود السري تلقائيا
+function updateSecretCode() {
+    if (editingId) {
+        // لا يتم تحديث الكود تلقائيًا أثناء التعديل
+        // الكود يكون ثابت بمجرد إنشائه
+        // إذا أراد المستخدم تغييره، فعليه إزالته يدوياً ثم الضغط على زر التحديث
+        return; 
+    }
+    secretCodeInput.value = generateSecretCode();
+}
+
+// ربط الحقول بحدث التحديث التلقائي
+[nameInput, dobInput, nationalityInput, locationInput, securityLevelInput].forEach(el => {
+    el.addEventListener('input', updateSecretCode);
+    el.addEventListener('change', updateSecretCode);
+});
+
+
+/* utility: convert file to dataURL */
+function fileToDataURL(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result);
+    reader.onerror = ()=> reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/* render list (unchanged) */
+async function renderList(filter=''){
+  const records = await getAllRecords();
+  allRecordsCache = records;
+  recordsList.innerHTML = '';
+  const q = (filter||'').trim().toLowerCase();
+  const filtered = records.filter(r => {
+    if(!q) return true;
+    return (r.name||'').toLowerCase().includes(q) || 
+           (r.info||'').toLowerCase().includes(q) ||
+           (r.secretCode||'').includes(q);
+  });
+  if(filtered.length === 0){
+    recordsList.innerHTML = '<div class="muted" style="padding:8px">لا توجد سجلات مطابقة.</div>';
+    return;
+  }
+  for(const r of filtered){
+    const card = document.createElement('div');
+    card.className = 'card';
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    if(r.photoDataUrl){
+      const img = document.createElement('img');
+      img.src = r.photoDataUrl;
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = (r.name && r.name[0]) ? r.name[0].toUpperCase() : 'U';
+    }
+
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const h = document.createElement('h3'); h.textContent = r.name || 'بدون اسم';
+    const p = document.createElement('p'); p.textContent = `الكود: ${r.secretCode || 'غير متوفر'} | التصنيف: ${r.securityLevel || 'غير مصنف'}`;
+    meta.appendChild(h); meta.appendChild(p);
+
+    const actions = document.createElement('div'); actions.className = 'cardActions';
+    const btnView = document.createElement('button'); btnView.className='btn btn-ghost'; btnView.textContent='فتح';
+    btnView.addEventListener('click', ()=> loadToForm(r.id));
+    const btnDel = document.createElement('button'); btnDel.className='btn btn-ghost'; btnDel.textContent='حذف';
+    btnDel.addEventListener('click', async ()=>{
+      if(!confirm('هل تريد حذف هذا الملف؟')) return;
+      await deleteRecordById(r.id);
+      await renderList(searchInput.value);
+      if(editingId === r.id) resetForm();
+    });
+    actions.appendChild(btnView); actions.appendChild(btnDel);
+
+    card.appendChild(avatar); card.appendChild(meta); card.appendChild(actions);
+    recordsList.appendChild(card);
+  }
+}
+
+/* load record into form for editing */
+async function loadToForm(id){
+  const r = await getRecordById(id);
+  if(!r) return;
+  editingId = r.id;
+  formTitle.textContent = 'تعديل الملف السري';
+  nameInput.value = r.name || '';
+  infoInput.value = r.info || '';
+  secretCodeInput.value = r.secretCode || ''; 
+  dobInput.value = r.dob || ''; 
+  nationalityInput.value = r.nationality || ''; 
+  locationInput.value = r.location || ''; 
+  securityLevelInput.value = r.securityLevel || 'Unclassified'; 
+
+  // عند التعديل، يجب أن يكون الكود للقراءة فقط
+  secretCodeInput.setAttribute('readonly', 'true');
+
+  currentImageDataUrl = r.photoDataUrl || null;
+  if(r.photoDataUrl){
+    photoPreview.innerHTML = `<img src="${r.photoDataUrl}" alt="photo">`;
+  } else {
+    photoPreview.textContent = 'لا توجد صورة';
+  }
+  updateBtn.style.display = 'inline-block';
+  cancelEditBtn.style.display = 'inline-block';
+  deleteBtn.style.display = 'inline-block';
+  exportRecordBtn.style.display = 'inline-block';
+  saveBtn.style.display = 'none';
+  lastModified.textContent = r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '-';
+}
+
+/* reset form to create-new */
+function resetForm(){
+  editingId = null;
+  formTitle.textContent = 'إنشاء ملف سري جديد';
+  nameInput.value = '';
+  infoInput.value = '';
+  photoInput.value = '';
+  dobInput.value = '';
+  nationalityInput.value = '';
+  locationInput.value = '';
+  securityLevelInput.value = 'Unclassified';
+  
+  // توليد رقم عشوائي جديد لزيادة التفرد في حالة إنشاء ملف جديد
+  randomSuffix = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+  secretCodeInput.value = generateSecretCode(); // توليد كود بناء على الحقول الفارغة
+  secretCodeInput.removeAttribute('readonly'); // السماح بالكتابة/التوليد التلقائي عند الإنشاء
+  
+  currentImageDataUrl = null;
+  photoPreview.textContent = 'لا توجد صورة';
+  updateBtn.style.display = 'none';
+  cancelEditBtn.style.display = 'none';
+  deleteBtn.style.display = 'none';
+  exportRecordBtn.style.display = 'none';
+  saveBtn.style.display = 'inline-block';
+  lastModified.textContent = '-';
+}
+
+/* handle image input change (unchanged) */
+photoInput.addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if(!f){ currentImageDataUrl = null; photoPreview.textContent = 'لا توجد صورة'; return; }
+  if(f.size > 4 * 1024 * 1024){
+    alert('حجم الصورة كبير — استخدم صورة أصغر من 4MB');
+    photoInput.value = '';
+    return;
+  }
+  currentImageDataUrl = await fileToDataURL(f);
+  photoPreview.innerHTML = `<img src="${currentImageDataUrl}" alt="photo">`;
+});
+
+/* save new record */
+saveBtn.addEventListener('click', async ()=>{
+  const name = nameInput.value.trim();
+  const secretCode = secretCodeInput.value.trim();
+  
+  if(!name || secretCode.length !== 11 || !/^\d{11}$/.test(secretCode)){ 
+    alert('الرجاء إدخال الاسم، وتأكد أن الكود السري مكون من 11 رقم بالضبط.'); 
+    return; 
+  }
+  
+  const rec = {
+    name, 
+    info: infoInput.value.trim(),
+    secretCode,
+    dob: dobInput.value,
+    nationality: nationalityInput.value.trim(),
+    location: locationInput.value.trim(),
+    securityLevel: securityLevelInput.value,
+    photoDataUrl: currentImageDataUrl || null,
+  };
+  
+  try {
+    await addRecord(rec);
+    alert('تم حفظ الملف السري بنجاح!');
+    resetForm();
+    await renderList(searchInput.value);
+  } catch(err) {
+    if (err.name === 'ConstraintError') {
+      alert('خطأ: الكود السري ' + secretCode + ' مكرر. يُرجى تغيير بعض البيانات ليتغير الكود (أو إدخاله يدوياً).');
+    } else {
+      alert('حدث خطأ أثناء الحفظ: ' + err.message);
+    }
+  }
+});
+
+/* update existing (unchanged logic for saving) */
+updateBtn.addEventListener('click', async ()=>{
+  if(!editingId){ alert('لا يوجد ملف قيد التعديل'); return; }
+  const rec = await getRecordById(editingId);
+  if(!rec) { alert('السجل غير موجود'); resetForm(); await renderList(); return; }
+  
+  const secretCode = secretCodeInput.value.trim();
+  if(secretCode.length !== 11 || !/^\d{11}$/.test(secretCode)){
+    alert('يجب أن يكون الكود السري مكوناً من 11 رقماً.');
+    return;
+  }
+
+  // التحقق من تكرار الكود السري في حالة تعديله
+  if(rec.secretCode !== secretCode){
+     const existingRec = await getRecordBySecretCode(secretCode);
+     if(existingRec && existingRec.id !== editingId){
+        alert('خطأ: الكود السري الجديد مكرر. يُرجى اختيار ترميز آخر.');
+        return;
+     }
+  }
+
+  rec.name = nameInput.value.trim();
+  rec.info = infoInput.value.trim();
+  rec.secretCode = secretCode; 
+  rec.dob = dobInput.value;
+  rec.nationality = nationalityInput.value.trim();
+  rec.location = locationInput.value.trim();
+  rec.securityLevel = securityLevelInput.value;
+  rec.photoDataUrl = currentImageDataUrl || null;
+  rec.updatedAt = new Date().toISOString();
+  
+  await addRecord(rec);
+  resetForm();
+  await renderList(searchInput.value);
+  alert('تم تحديث الملف بنجاح!');
+});
+
+cancelEditBtn.addEventListener('click', ()=> resetForm());
+
+/* export/delete/search functions (unchanged) */
+exportRecordBtn.addEventListener('click', async ()=>{
+  if(!editingId) return;
+  const rec = await getRecordById(editingId);
+  if(!rec) return;
+  const blob = new Blob([JSON.stringify(rec, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'SECRET_' + (rec.secretCode||'record') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+deleteBtn.addEventListener('click', async ()=>{
+  if(!editingId) return;
+  if(!confirm('هل تريد حذف هذا الملف نهائيًا؟ هذا الإجراء لا يُلغي!')) return;
+  await deleteRecordById(editingId);
+  resetForm();
+  await renderList(searchInput.value);
+  alert('تم حذف الملف.');
+});
+
+searchInput.addEventListener('input', async (e)=>{
+  await renderList(e.target.value);
+});
+btnClearSearch.addEventListener('click', ()=>{
+  searchInput.value = '';
+  renderList();
+});
+
+btnExportAll.addEventListener('click', async ()=>{
+  const recs = await getAllRecords();
+  const blob = new Blob([JSON.stringify(recs, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'TOP_SECRET_BACKUP.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+btnImport.addEventListener('click', ()=> importFile.click());
+importFile.addEventListener('change', async (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const txt = await f.text();
+  try {
+    const arr = JSON.parse(txt);
+    if(!Array.isArray(arr)) throw new Error('الملف غير صحيح: يجب أن يحتوي على مصفوفة من السجلات');
+    
+    for(const it of arr){
+      if(!it.id) it.id = crypto.randomUUID();
+      if(!it.secretCode || it.secretCode.length !== 11) throw new Error('سجل مستورد لا يحتوي على كود سري صحيح (11 رقم).'); 
+      it.createdAt = it.createdAt || new Date().toISOString();
+      it.updatedAt = new Date().toISOString();
+      await addRecord(it);
+    }
+    alert('تم استيراد البيانات بنجاح');
+    importFile.value = '';
+    await renderList();
+  } catch (err){
+    alert('خطأ في استيراد الملف. تأكد أن الملف بصيغة JSON وأن الأكواد السرية غير مكررة وصحيحة: ' + err.message);
+  }
+});
+
+btnClearAll.addEventListener('click', async ()=>{
+  if(!confirm('تحذير سري للغاية: هل تريد حذف جميع الملفات المحلية بشكل نهائي؟ هذا الإجراء لا يُلغى!')) return;
+  await clearAll();
+  resetForm();
+  await renderList();
+  alert('تم مسح قاعدة البيانات بالكامل.');
+});
+
+/* ====== MODAL LOGIC (unchanged) ====== */
+btnOpenSearchModal.addEventListener('click', () => {
+  searchModal.style.display = 'flex';
+  modalCodeInput.value = '';
+  displayModalResult(null); 
+});
+
+closeModal.addEventListener('click', () => {
+  searchModal.style.display = 'none';
+});
+
+window.addEventListener('click', (event) => {
+  if (event.target === searchModal) {
+    searchModal.style.display = 'none';
+  }
+});
+
+function displayModalResult(record) {
+    if (!record) {
+        modalName.innerHTML = `الاسم: <strong>غير متوفر / مجهول</strong>`;
+        modalSecret.innerHTML = `الكود: <strong>خطأ في الترميز</strong>`;
+        modalLevel.innerHTML = `التصنيف: <strong>-</strong>`;
+        modalLocation.innerHTML = `الموقع الحالي: <strong>-</strong>`;
+        modalInfo.innerHTML = `المعلومات الاستخباراتية: <strong>لم يتم العثور على سجل يطابق الكود المدخل.</strong>`;
+        modalImage.innerHTML = `لا توجد صورة`;
+        modalImage.style.backgroundColor = 'red';
+        return;
+    }
+    
+    modalName.innerHTML = `الاسم: <strong>${record.name || 'غير محدد'}</strong>`;
+    modalSecret.innerHTML = `الكود: <strong>${record.secretCode}</strong>`;
+    modalLevel.innerHTML = `التصنيف: <strong>${record.securityLevel || 'غير مصنف'}</strong>`;
+    modalLocation.innerHTML = `الموقع الحالي: <strong>${record.location || 'غير معروف'}</strong>`;
+    modalInfo.innerHTML = `المعلومات الاستخباراتية: <strong>${record.info || 'لا توجد ملاحظات مفصلة.'}</strong>`;
+    
+    if(record.photoDataUrl){
+        modalImage.innerHTML = `<img src="${record.photoDataUrl}" alt="photo">`;
+        modalImage.style.backgroundColor = 'transparent';
+    } else {
+        modalImage.innerHTML = `لا توجد صورة`;
+        modalImage.style.backgroundColor = 'var(--bg)';
+    }
+}
+
+modalSearchBtn.addEventListener('click', async () => {
+    const code = modalCodeInput.value.trim();
+    if (code.length !== 11 || !/^\d{11}$/.test(code)) {
+        alert('يجب إدخال كود سري مكون من 11 رقم بالضبط.');
+        displayModalResult(null); 
+        return;
+    }
+
+    const record = await getRecordBySecretCode(code);
+    displayModalResult(record);
+});
+
+
+/* initial render */
+(async ()=> {
+  await renderList();
+  resetForm();
+})();
+// ... (كود showPage و navButtons.forEach) ...
+
+// إظهار الصفحة الأولى عند التحميل (باستخدام الاسم الجديد)
+showPage('index.hrml'); 
+
+</script>
+
+
+</body>
+</html>

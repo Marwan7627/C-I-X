@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>مولّد تقارير احترافي — Realistic (v2)</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=IBM+Plex+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+  :root{
+    --paper:#fbfbf7; --ink:#0b1724; --muted:#667085;
+    --stamp-red:#b0171f; --stamp-amber:#c88000; --stamp-green:#056046;
+    --accent:#0f1724;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:'Cairo', system-ui, Arial; background:#071026; color:#fff; padding:18px; -webkit-font-smoothing:antialiased}
+  .app{max-width:1220px; margin:0 auto; display:grid; grid-template-columns:1fr 520px; gap:18px}
+  .panel{background:rgba(255,255,255,0.03); padding:18px; border-radius:10px}
+  h2{margin:0 0 10px; font-size:16px}
+  label{display:block; font-size:13px; color:#cbd5e1; margin-top:8px}
+  input[type="text"], input[type="date"], textarea, select {width:100%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); background:transparent; color:#fff; font-size:14px}
+  textarea{min-height:100px; resize:vertical}
+  .row{display:flex; gap:8px}
+  .btn{padding:10px 12px;border-radius:8px;border:0; cursor:pointer;font-weight:700}
+  .btn-primary{background:linear-gradient(90deg,#7c3aed,#4f46e5); color:white}
+  .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.06); color:#cbd5e1}
+  .small{font-size:12px;color:#9aa8bf; margin-top:6px}
+
+  /* preview area */
+  .preview-wrap{
+    padding:18px; background:linear-gradient(180deg,#e9eef6,#f7f9fc); border-radius:8px; color:var(--ink); min-height:420px; overflow:auto;
+    position: relative; /* لتحديد موضع التأثيرات */
+  }
+
+  /* تأثيرات الاستخبارات Glitch و Scanline */
+  .preview-wrap::before, .preview-wrap::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .preview-wrap::before {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 1px,
+      rgba(0, 255, 255, 0.05) 1px,
+      rgba(0, 255, 255, 0.05) 2px
+    );
+    animation: scanline 8s linear infinite; /* تأثير خطوط المسح */
+  }
+
+  .preview-wrap::after {
+    background: rgba(0, 0, 0, 0.05);
+    mix-blend-mode: overlay;
+    animation: glitch 0.8s steps(1) infinite; /* تأثير خلل بسيط */
+  }
+
+  @keyframes scanline {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100%; }
+  }
+
+  @keyframes glitch {
+    0% { opacity: 0.05; transform: translate(1px, -1px); }
+    20% { opacity: 0.02; transform: translate(-1px, 1px); }
+    40% { opacity: 0.08; transform: translate(1px, 2px); }
+    60% { opacity: 0.03; transform: translate(-2px, -1px); }
+    80% { opacity: 0.06; transform: translate(2px, 1px); }
+    100% { opacity: 0.04; transform: translate(-1px, -2px); }
+  }
+
+
+  /* realistic report A4 */
+  .report{
+    width:210mm; 
+    min-height:297mm; 
+    box-sizing:border-box; padding:18mm 18mm; background:var(--paper); color:var(--ink); position:relative; font-family:'IBM Plex Mono', monospace; border:1px solid rgba(0,0,0,0.06); box-shadow:0 8px 36px rgba(2,6,23,0.25);
+    background-color: var(--paper);
+  }
+  /* subtle paper texture (CSS only) */
+  .report::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image: linear-gradient(transparent 96%, rgba(0,0,0,0.005) 96%);
+    background-size:100% 6px; mix-blend-mode:multiply; opacity:0.6;
+  }
+
+  /* top classification bar */
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px}
+  .class-box{font-weight:800; padding:6px 10px; border-radius:6px; font-size:12px; letter-spacing:1px}
+  .class-top{background:linear-gradient(90deg,#fee2e2,#fecaca); color:var(--stamp-red); border:1px solid rgba(176,23,31,0.2)}
+  .class-secret{background:linear-gradient(90deg,#fff7ed,#ffedd5); color:var(--stamp-amber)}
+  .class-conf{background:linear-gradient(90deg,#ecfdf5,#bbf7d0); color:var(--stamp-green)}
+  .doc-meta{font-size:12px; color:#1f2937; font-family:'IBM Plex Mono', monospace; display:flex; gap:12px; align-items:center}
+
+  .hdr{display:flex; gap:12px; align-items:center; margin-bottom:6px}
+  .logo{width:86px;height:86px;border-radius:10px;background:linear-gradient(135deg,#0b1220,#071026); color:white; display:flex; align-items:center; justify-content:center; font-weight:800}
+  .title-block h1{margin:0; font-size:24px; letter-spacing:6px}
+  .subtitle{font-size:11px; color:#334155; margin-top:6px}
+
+  /* تم إخفاء الختم هنا */
+  .stamp{display: none; width:180px; height:66px; position:relative} 
+  .stamp .text{position:absolute; right:0; top:0; transform:rotate(-18deg); font-weight:900; font-size:28px; padding:10px 12px; border:6px solid; display:inline-block; letter-spacing:2px; background:rgba(255,255,255,0.02)}
+
+  hr.sep{border:none;border-top:1px solid rgba(2,6,23,0.05); margin:12px 0 18px}
+  .section-title{font-weight:800; margin-top:10px; margin-bottom:8px; color:#0b1724}
+  .body-text{font-size:13px; line-height:1.6; white-space:pre-wrap; color:#122033}
+  .two-col{display:flex; gap:14px; margin-top:12px}
+  .side-img{
+    width:280px; height:160px; background:#0b1220; display:flex; align-items:center; justify-content:center; color:#fff; overflow:hidden; border:1px solid rgba(0,0,0,0.06);
+    /* إضافة لتغيير لون الخلفية إذا كانت "No Image" */
+    background-color: #e0e0e0;
+    color: #555;
+    font-size: 0.9em;
+    font-style: italic;
+  }
+  .side-img.has-image{
+    background-color: #0b1220; /* استعادة لون الخلفية الأصلي إذا كانت هناك صورة */
+    color: #fff;
+    font-size: 1em;
+    font-style: normal;
+  }
+  .side-img img{width:100%; height:100%; object-fit:cover; display:block}
+
+  .footer-note{font-size:11px; color:#6b7280; margin-top:18px; border-top:1px solid #e6eef6; padding-top:10px; text-align:center}
+
+  /* redaction sample (visual) */
+  .redact{background:#0b1220; color:#0b1220; display:inline-block; padding:0 6px; border-radius:3px}
+
+  /* language classes */
+  .ltr{direction:ltr}
+  .rtl{direction:rtl}
+
+  /* @media لحل مشكلة التصميم على الشاشات الصغيرة عند الالتقاط */
+  @media print, screen and (max-width:980px){ 
+    .app{grid-template-columns:1fr} 
+    .report{transform:none; transform-origin:top center; width:210mm; height:auto} 
+  }
+  /* إزالة التأثيرات عند الطباعة أو التحويل لـ PDF */
+  @media print {
+    .preview-wrap::before, .preview-wrap::after {
+      display: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="panel">
+    <h2>مولّد تقارير احترافي — إعدادات</h2>
+
+    <label>فرض اللغة (افتراضي: اكتشاف تلقائي)</label>
+    <select id="forceLang">
+      <option value="auto">اكتشاف تلقائي</option>
+      <option value="ar">Arabic</option>
+      <option value="en">English</option>
+    </select>
+
+    <label>عنوان التقرير</label>
+    <input id="reportTitle" type="text" value="INTELLIGENCE REPORT">
+
+    <div class="row">
+      <div style="flex:1">
+        <label>رقم المستند</label>
+        <input id="docNo" type="text" value="174-0493">
+      </div>
+      <div style="width:160px">
+        <label>التاريخ</label>
+        <input id="docDate" type="date" value="">
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1">
+        <label>المصدر</label>
+        <input id="source" type="text" value="HUMINT">
+      </div>
+      <div style="width:160px">
+        <label>التصنيف</label>
+        <select id="classification">
+          <option value="TOP SECRET">TOP SECRET</option>
+          <option value="SECRET">SECRET</option>
+          <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+          <option value="UNCLASSIFIED">UNCLASSIFIED</option>
+          <option value="سري للغاية">سري للغاية</option>
+          <option value="سري">سري</option>
+          <option value="سري محدود">سري محدود</option>
+        </select>
+      </div>
+    </div>
+
+    <label>عنوان الموضوع</label>
+    <input id="subject" type="text" value="TARGET BEHAVIOR ANALYSIS - SUBJECT 7A">
+
+    <label>محتوى التقرير (المعاينة حية)</label>
+    <textarea id="body">The following report provides an analysis of the recent activities and behavior of Subject 7A. based on intelligence gathered from various sources. The subject has exhibited patterns indicative of potential security threats.</textarea>
+
+    <label>توصية / ملاحظات</label>
+    <textarea id="recommend">It is recommended to increase surveillance on Subject 7A and assess the feasibility of an interdiction operation.</textarea>
+
+    <label>أضف صورة (سيتم تحويلها داخليًا إلى DataURL وتضمينها في المعاينة و PDF)</label>
+    <input id="imageFile" type="file" accept="image/*">
+
+    <div style="display:flex; gap:8px; margin-top:12px">
+      <button class="btn btn-primary" id="downloadPdfBtn">تحميل كـ PDF (A4)</button>
+      <button class="btn btn-ghost" id="resetBtn">إعادة ضبط</button>
+    </div>
+
+    <div class="small" style="margin-top:10px">ملاحظات: تأكد من رفع الصور المحلية (من جهازك). النظام يقوم بتحويل الصورة إلى DataURL ويدمجها في التقرير — لذلك لا يلزم أي صلاحيات سيرفر.</div>
+  </div>
+
+  <div class="panel">
+    <h2>معاينة تقرير (احترافي)</h2>
+    <div class="preview-wrap">
+      <div id="report" class="report rtl" lang="ar" aria-live="polite">
+        <div class="topbar">
+          <div style="display:flex; gap:10px; align-items:center">
+            <div id="classBox" class="class-box class-top">TOP SECRET</div>
+            <div class="doc-meta">
+              <div>DOCUMENT NO. <strong id="p_docno">174-0493</strong></div>
+              <div>DATE <strong id="p_date">2023-02-15</strong></div>
+              <div>SOURCE <strong id="p_source">HUMINT</strong></div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:#475569;">CIX — CENTRAL INTELLIGENCE X</div>
+        </div>
+
+        <div class="hdr">
+          <div class="logo" id="p_logo">CIX</div>
+          <div class="title-block">
+            <h1 id="p_title">INTELLIGENCE REPORT</h1>
+            <div class="subtitle" id="p_subtitle">CONFIDENTIAL | TOP SECRET</div>
+          </div>
+          </div>
+
+        <hr class="sep">
+
+        <div>
+          <div class="section-title" id="p_subject">TARGET BEHAVIOR ANALYSIS - SUBJECT 7A</div>
+          <div class="section-title" style="margin-top:6px; font-weight:600">SECURITY PROFILE</div>
+          <div class="body-text" id="p_body">
+            The following report provides an analysis of the recent activities and behavior of Subject 7A. based on intelligence gathered from various sources. The subject has exhibited patterns indicative of potential security threats.
+          </div>
+
+          <div class="two-col">
+            <div style="flex:1">
+              
+              <div class="body-text" id="p_summary">Subject 7A has established connections with known extremist operatives. Recent communications indicate an increased interest in covert activities.</div>
+
+              <div class="section-title" style="margin-top:12px"></div>
+              <div class="body-text" id="p_humint">Confidential informants report details in original sources.</div>
+
+              <div class="section-title" style="margin-top:12px"></div>
+              <div class="body-text" id="p_tech">Surveillance footage reveals Subject 7A conducting late-night reconnaissance of multiple locations.</div>
+            </div>
+
+            <div style="width:280px">
+              <div class="side-img" id="p_image">No Image</div>
+            </div>
+          </div>
+
+          <div class="section-title" style="margin-top:12px">. INTELLIGENCE RECOMMENDATION</div>
+          <div class="body-text" id="p_recommend">It is recommended to increase surveillance on Subject 7A and assess the feasibility of an interdiction operation.</div>
+
+          <div class="footer-note">DISSEMINATION OF THIS DOCUMENT PROHIBITED WITHOUT AUTHORIZATION</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(async ()=> {
+  const report = document.getElementById('report');
+  const p_title = document.getElementById('p_title');
+  const p_subtitle = document.getElementById('p_subtitle');
+  const p_docno = document.getElementById('p_docno');
+  const p_date = document.getElementById('p_date');
+  const p_source = document.getElementById('p_source');
+  const p_subject = document.getElementById('p_subject');
+  const p_body = document.getElementById('p_body');
+  const p_summary = document.getElementById('p_summary');
+  const p_humint = document.getElementById('p_humint');
+  const p_tech = document.getElementById('p_tech');
+  const p_recommend = document.getElementById('p_recommend');
+  const p_image = document.getElementById('p_image');
+  // const p_stamp = document.getElementById('p_stamp'); // تم إزالته
+  const classBox = document.getElementById('classBox');
+
+  const reportTitle = document.getElementById('reportTitle');
+  const docNo = document.getElementById('docNo');
+  const docDate = document.getElementById('docDate');
+  const source = document.getElementById('source');
+  const classification = document.getElementById('classification');
+  const subject = document.getElementById('subject');
+  const body = document.getElementById('body');
+  const recommend = document.getElementById('recommend');
+  const imageFile = document.getElementById('imageFile');
+  const forceLang = document.getElementById('forceLang');
+
+  // default date
+  function todayISO(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  docDate.value = docDate.value || todayISO(); 
+
+  // language detection
+  function detectLanguage(text){
+    if(forceLang.value !== 'auto') return forceLang.value === 'ar' ? 'ar' : 'en';
+    const hasArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/u.test(text);
+    return hasArabic ? 'ar' : 'en';
+  }
+
+  // stamp update - تم تعديلها لتحديث الختم العلوي فقط
+  function updateStamp(value, lang){
+    const mapEnToAr = {
+      'TOP SECRET':'سري للغاية',
+      'SECRET':'سري',
+      'CONFIDENTIAL':'سري محدود',
+      'UNCLASSIFIED':'غير مصنف'
+    };
+    let text = value;
+    if(lang === 'ar'){
+      text = mapEnToAr[value] || value; 
+    } else {
+      const rev = Object.fromEntries(Object.entries(mapEnToAr).map(([k,v])=>[v,k]));
+      text = rev[value] || value;
+    }
+    
+    let colorClass = '';
+    const vLower = (text+'').toLowerCase();
+    if(vLower.includes('top') || vLower.includes('سري للغاية')) colorClass = 'class-top';
+    else if(vLower.includes('secret') || vLower.includes('سري')) colorClass = 'class-secret';
+    else if(vLower.includes('confidential') || vLower.includes('سري محدود')) colorClass = 'class-conf';
+
+    // تحديث classBox فقط
+    classBox.textContent = (text+'').toUpperCase();
+    classBox.className = 'class-box ' + colorClass;
+  }
+
+  // update preview live
+  function updatePreview(){
+    p_title.textContent = reportTitle.value || 'INTELLIGENCE REPORT';
+    p_docno.textContent = docNo.value || '';
+    p_date.textContent = docDate.value || todayISO();
+    p_source.textContent = source.value || '';
+    p_subject.textContent = subject.value || '';
+    p_recommend.textContent = recommend.value || '';
+
+    const parts = body.value.split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
+    
+    const firstSection = parts[0] || body.value || '';
+    p_body.textContent = firstSection;
+    p_summary.textContent = parts[1] || 'Subject 7A has established connections...';
+    p_humint.textContent = parts[2] || 'Confidential informants report details...';
+    p_tech.textContent = parts[3] || 'Technical analysis available...';
+
+    const sample = (reportTitle.value + ' ' + subject.value + ' ' + body.value.slice(0,200)).trim();
+    const lang = detectLanguage(sample);
+    if(lang === 'ar'){
+      report.classList.remove('ltr'); report.classList.add('rtl');
+      report.setAttribute('lang','ar'); 
+      report.style.fontFamily = "'Cairo', 'IBM Plex Mono', monospace";
+      p_body.style.textAlign = 'right';
+      p_summary.style.textAlign = 'right';
+      p_humint.style.textAlign = 'right';
+      p_tech.style.textAlign = 'right';
+      p_recommend.style.textAlign = 'right';
+
+    } else {
+      report.classList.remove('rtl'); report.classList.add('ltr');
+      report.setAttribute('lang','en'); 
+      report.style.fontFamily = "'IBM Plex Mono', monospace";
+      p_body.style.textAlign = 'left';
+      p_summary.style.textAlign = 'left';
+      p_humint.style.textAlign = 'left';
+      p_tech.style.textAlign = 'left';
+      p_recommend.style.textAlign = 'left';
+    }
+
+    updateStamp(classification.value, lang);
+  }
+
+  [reportTitle, docNo, docDate, source, classification, subject, body, recommend, forceLang].forEach(el=>{
+    el.addEventListener('input', updatePreview);
+    el.addEventListener('change', updatePreview);
+  });
+
+  let lastImageDataUrl = null;
+  imageFile.addEventListener('change', function(e){
+    const f = e.target.files && e.target.files[0];
+    if(!f){ 
+      p_image.innerHTML = ''; // إزالة المحتوى بالكامل
+      p_image.classList.remove('has-image'); // إزالة فئة has-image
+      lastImageDataUrl = null; 
+      return; 
+    }
+    const reader = new FileReader();
+    reader.onload = function(ev){
+      const url = ev.target.result;
+      lastImageDataUrl = url;
+      p_image.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'attached image';
+      img.loading = 'eager';
+      p_image.appendChild(img);
+      p_image.classList.add('has-image'); // إضافة فئة has-image
+      updatePreview();
+    };
+    reader.readAsDataURL(f);
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    reportTitle.value='INTELLIGENCE REPORT';
+    docNo.value='174-0493';
+    docDate.value = todayISO();
+    source.value='HUMINT';
+    classification.value='TOP SECRET';
+    subject.value='TARGET BEHAVIOR ANALYSIS - SUBJECT 7A';
+    body.value='The following report provides an analysis of the recent activities and behavior of Subject 7A. based on intelligence gathered from various sources. The subject has exhibited patterns indicative of potential security threats.';
+    recommend.value='It is recommended to increase surveillance on Subject 7A and assess the feasibility of an interdiction operation.';
+    imageFile.value = '';
+    p_image.innerHTML = ''; // إزالة "No Image"
+    p_image.classList.remove('has-image'); // إزالة فئة has-image
+    lastImageDataUrl = null;
+    updatePreview();
+  });
+
+  updatePreview();
+
+  async function waitForImagesDecoded(container, timeoutMs = 5000){
+    const imgs = Array.from(container.querySelectorAll('img'));
+    if(imgs.length === 0) return;
+    await Promise.all(imgs.map(img => {
+      if(img.complete && img.naturalWidth !== 0){
+        if(img.decode) return img.decode().catch(()=>null);
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        const t = setTimeout(()=> { resolve(); }, timeoutMs);
+        img.addEventListener('load', ()=> { clearTimeout(t); if(img.decode) img.decode().then(()=>resolve()).catch(()=>resolve()); else resolve(); }, {once:true});
+        img.addEventListener('error', ()=> { clearTimeout(t); resolve(); }, {once:true});
+      });
+    }));
+  }
+
+  document.getElementById('downloadPdfBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('downloadPdfBtn');
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = 'جارٍ إنشاء PDF (الرجاء الانتظار)...';
+
+    try {
+      updatePreview(); 
+
+      await waitForImagesDecoded(report, 7000); 
+
+      const prevBoxShadow = report.style.boxShadow;
+      const prevBackground = report.style.background;
+      const prevReportBeforeDisplay = getComputedStyle(report, '::before').display; // حفظ حالة ::before
+      report.style.boxShadow = 'none';
+      report.style.background = 'white';
+      
+      // إزالة تأثير ::before مؤقتًا لـ html2canvas
+      const styleElement = document.createElement('style');
+      styleElement.textContent = '.report::before { display: none !important; } .preview-wrap::before, .preview-wrap::after { display: none !important; }';
+      document.head.appendChild(styleElement);
+
+
+      const scale = Math.min(3, window.devicePixelRatio || 2); 
+      const canvas = await html2canvas(report, {
+        scale: scale,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        imageTimeout: 0
+      });
+
+      report.style.boxShadow = prevBoxShadow;
+      report.style.background = prevBackground;
+      document.head.removeChild(styleElement); // إزالة الستايل المؤقت
+
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+      const pxPerMm = imgW / pageWidth;
+      const imgH_mm = imgH / pxPerMm;
+
+      if(imgH_mm <= pageHeight){
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgH_mm);
+      } else {
+        let remainingHeightPx = imgH;
+        let positionY = 0;
+        const pageHeightPx = Math.floor(pxPerMm * pageHeight);
+        while(remainingHeightPx > 0){
+          const slice = document.createElement('canvas');
+          slice.width = imgW;
+          slice.height = Math.min(pageHeightPx, remainingHeightPx);
+          const sctx = slice.getContext('2d');
+          sctx.drawImage(canvas, 0, positionY, imgW, slice.height, 0, 0, imgW, slice.height);
+          const sliceData = slice.toDataURL('image/jpeg', 0.95);
+          const sliceH_mm = slice.height / pxPerMm;
+          pdf.addImage(sliceData, 'JPEG', 0, 0, pageWidth, sliceH_mm);
+          remainingHeightPx -= slice.height;
+          positionY += slice.height;
+          if(remainingHeightPx > 0) pdf.addPage();
+        }
+      }
+
+      const filename = (reportTitle.value || 'report').replace(/[^\w\-]+/g,'_').toLowerCase() + '.pdf';
+      pdf.save(filename);
+
+    } catch (err) {
+      console.error(err);
+      alert('حدث خطأ أثناء إنشاء PDF. قد تكون مشكلة في تحميل الخطوط أو الصور: ' + (err.message || err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
